@@ -5,14 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>ChatMemo</title>
     
-    <!-- PWA Settings for Android & iOS -->
+    <!-- PWA Settings for Mobile -->
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#ffffff">
     
-    <!-- Embedded Manifest (JSON) to force Standalone Mode -->
-    <link rel="manifest" href='data:application/manifest+json;charset=utf-8,%7B%22name%22%3A%22ChatMemo%22%2C%22short_name%22%3A%22ChatMemo%22%2C%22start_url%22%3A%22.%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%23f0f2f5%22%2C%22theme_color%22%3A%22%23ffffff%22%7D'>
+    <!-- Embedded Manifest for Standalone Mode -->
+    <!-- Note: Data URI manifest works in many browsers but external file is best for full PWA support -->
+    <link rel="manifest" href='data:application/manifest+json;charset=utf-8,%7B%22name%22%3A%22ChatMemo%22%2C%22short_name%22%3A%22ChatMemo%22%2C%22start_url%22%3A%22.%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%23f0f2f5%22%2C%22theme_color%22%3A%22%23ffffff%22%2C%22icons%22%3A%5B%7B%22src%22%3A%22https%3A%2F%2Fcdn-icons-png.flaticon.com%2F512%2F2040%2F2040946.png%22%2C%22sizes%22%3A%22192x192%22%2C%22type%22%3A%22image%2Fpng%22%7D%5D%7D'>
 
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
@@ -277,5 +278,3 @@
     </script>
 </body>
 </html>
-
-
