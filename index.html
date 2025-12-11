@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ChatMemo</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        /* Hide scrollbar */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        body {
+            background-color: #f0f2f5;
+            -webkit-tap-highlight-color: transparent;
+            overscroll-behavior-y: none;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+        
+        .bubble-shadow {
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useCallback } = React;
+
+        // --- Icons ---
+        const PlusIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>);
+        const CopyIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>);
+        const CheckIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>);
+
+        // --- Helper Functions ---
+        const copyToClipboard = (text) => {
+            return new Promise((resolve, reject) => {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(text).then(resolve).catch(() => {
+                        fallbackCopy(text) ? resolve() : reject();
+                    });
+                } else {
+                    fallbackCopy(text) ? resolve() : reject();
+                }
+            });
+        };
+
+        const fallbackCopy = (text) => {
+            try {
+                const textArea = document.createElement("textarea");
+                textArea.value = text;
+                textArea.style.position = "fixed";
+                textArea.style.left = "-9999px";
+                document.body.appendChild(textArea);
+                textArea.select();
+                const successful = document.execCommand('copy');
+                document.body.removeChild(textArea);
+                return successful;
+            } catch (err) {
+                return false;
+            }
+        };
+
+        // --- Components ---
+
+        const MessageBubble = ({ message, onUpdate, onDelete }) => {
+            const [isDragging, setIsDragging] = useState(false);
+            const [dragX, setDragX] = useState(0);
+            const [isDeleted, setIsDeleted] = useState(false);
+            const [copied, setCopied] = useState(false);
+            
+            const touchStartX = useRef(0);
+            const touchStartY = useRef(0);
+            const textareaRef = useRef(null);
+
+            // 高さ自動調整
+            const adjustHeight = useCallback(() => {
+                if (textareaRef.current) {
+                    textareaRef.current.style.height = 'auto';
+                    textareaRef.current.style.height = textareaRef.current.scrollHeight + 'px';
+                }
+            }, []);
+
+            // マウント時の処理（高さ調整と自動フォーカス）
+            useEffect(() => {
+                adjustHeight();
+
+                // 新規作成時のみ実行
+                if (message.initialFocus && textareaRef.current) {
+                    setTimeout(() => {
+                        textareaRef.current.focus();
+                        setTimeout(() => {
+                            textareaRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }, 300);
+                    }, 50);
+                }
+            }, [message.initialFocus, adjustHeight]);
+
+            // テキスト変更時の高さ調整
+            useEffect(() => {
+                adjustHeight();
+            }, [message.text, adjustHeight]);
+
+
+            const handleTouchStart = (e) => {
+                touchStartX.current = e.touches[0].clientX;
+                touchStartY.current = e.touches[0].clientY;
+                setDragX(0);
+            };
+
+            const handleTouchMove = (e) => {
+                const currentX = e.touches[0].clientX;
+                const currentY = e.touches[0].clientY;
+                const diffX = currentX - touchStartX.current;
+                const diffY = currentY - touchStartY.current;
+
+                // 縦スクロール優先
+                if (Math.abs(diffY) > Math.abs(diffX) && !isDragging) return;
+
+                // 横スワイプ判定
+                if (Math.abs(diffX) > 20) {
+                    setIsDragging(true);
+                    setDragX(diffX);
+                }
+            };
+
+            const handleTouchEnd = () => {
+                if (Math.abs(dragX) > 120) {
+                    setIsDeleted(true);
+                    setTimeout(() => onDelete(message.id), 300);
+                } else {
+                    setDragX(0);
+                }
+                setTimeout(() => setIsDragging(false), 300);
+            };
+
+            const handleCopyClick = async (e) => {
+                e.stopPropagation(); // バブリング防止
+                if (!message.text) return;
+                
+                try {
+                    await copyToClipboard(message.text);
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 1500);
+                } catch (err) {
+                    console.error("Copy failed", err);
+                }
+            };
+
+            if (isDeleted) return <div className="h-0 overflow-hidden transition-all duration-300 ease-in-out"></div>;
+
+            return (
+                <div 
+                    className="relative w-full mb-2 px-2 select-none touch-pan-y"
+                    onTouchStart={handleTouchStart}
+                    onTouchMove={handleTouchMove}
+                    onTouchEnd={handleTouchEnd}
+                    style={{
+                        transform: `translateX(${dragX}px)`,
+                        transition: isDragging ? 'none' : 'transform 0.3s cubic-bezier(0.25, 0.8, 0.5, 1)',
+                        opacity: 1 - Math.abs(dragX) / window.innerWidth
+                    }}
+                >
+                    <div className={`
+                        w-full bg-white rounded-xl p-3 bubble-shadow box-border relative group
+                        ${isDragging ? 'shadow-none' : ''}
+                    `}>
+                        {/* Copy Button */}
+                        <button 
+                            onClick={handleCopyClick}
+                            className="absolute top-2 right-2 p-1.5 rounded-full bg-gray-50 hover:bg-gray-100 transition-colors z-10"
+                            aria-label="copy"
+                        >
+                            {copied ? <CheckIcon /> : <div className="text-gray-400"><CopyIcon /></div>}
+                        </button>
+
+                        <textarea
+                            ref={textareaRef}
+                            value={message.text}
+                            onChange={(e) => {
+                                onUpdate(message.id, e.target.value);
+                            }}
+                            className="w-full bg-transparent resize-none outline-none text-gray-800 text-[15px] leading-relaxed overflow-hidden font-sans m-0 p-0 pr-8 block min-h-[1.5em]"
+                            rows={1}
+                            placeholder="メモを入力..."
+                        />
+                    </div>
+                </div>
+            );
+        };
+
+        const App = () => {
+            // 初期データを空配列に変更
+            const [messages, setMessages] = useState([]);
+            
+            const listEndRef = useRef(null);
+
+            const handleAdd = () => {
+                const newMsg = { 
+                    id: Date.now(), 
+                    text: "", 
+                    initialFocus: true 
+                };
+                setMessages(prev => [...prev, newMsg]);
+                
+                setTimeout(() => {
+                    listEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+                }, 100);
+            };
+
+            const handleUpdate = (id, newText) => {
+                setMessages(prev => prev.map(msg => msg.id === id ? { ...msg, text: newText } : msg));
+            };
+
+            const handleDelete = (id) => {
+                setMessages(prev => prev.filter(msg => msg.id !== id));
+            };
+
+            return (
+                <div className="flex flex-col h-screen bg-[#E2E5E9] overflow-hidden supports-[height:100svh]:h-[100svh]">
+                    {/* Header */}
+                    <header className="bg-white shadow-sm z-10 px-4 py-3 flex items-center justify-center shrink-0">
+                        <h1 className="text-lg font-bold text-gray-800 tracking-tight">ChatMemo</h1>
+                    </header>
+
+                    {/* Chat Area */}
+                    <main className="flex-1 overflow-y-auto no-scrollbar p-2 pt-4">
+                        <div className="flex flex-col justify-end min-h-0 pb-20">
+                            {messages.length === 0 && (
+                                <div className="text-center text-gray-400 mt-10 text-sm">
+                                    + ボタンを押してメモを作成
+                                </div>
+                            )}
+                            {messages.map(msg => (
+                                <MessageBubble 
+                                    key={msg.id} 
+                                    message={msg} 
+                                    onUpdate={handleUpdate}
+                                    onDelete={handleDelete}
+                                />
+                            ))}
+                            <div ref={listEndRef} />
+                        </div>
+                    </main>
+
+                    {/* FAB */}
+                    <button 
+                        onClick={handleAdd}
+                        className="fixed bottom-6 right-6 w-14 h-14 bg-blue-600 rounded-full shadow-lg flex items-center justify-center text-white active:scale-90 transition-transform duration-200 z-20 hover:bg-blue-700 focus:outline-none tap-highlight-transparent"
+                        style={{ boxShadow: '0 4px 12px rgba(37, 99, 235, 0.4)' }}
+                    >
+                        <PlusIcon />
+                    </button>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
+
+
